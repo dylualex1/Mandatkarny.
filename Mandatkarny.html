@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>System Ewidencji Mandatów - Policja RP</title>
+    
+    <!-- BIBLIOTEKI FIREBASE -->
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+
+    <style>
+        * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { background: #0f172a; color: #f8fafc; margin: 0; padding: 20px; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
+        .container { width: 100%; max-width: 550px; background: #1e293b; border: 1px solid #334155; padding: 25px; border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); }
+        h2 { text-align: center; color: #38bdf8; margin-top: 0; }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; font-size: 13px; font-weight: bold; margin-bottom: 5px; color: #94a3b8; }
+        input, select, textarea { width: 100%; padding: 10px; background: #0f172a; border: 1px solid #475569; color: #fff; border-radius: 6px; font-size: 14px; outline: none; }
+        textarea { resize: none; height: 70px; }
+        .btn-mandat { width: 100%; padding: 12px; background: #dc2626; color: white; border: none; border-radius: 6px; font-weight: bold; font-size: 15px; cursor: pointer; transition: 0.2s; }
+        .btn-mandat:hover { background: #b91c1c; }
+        
+        /* WZÓR PRAWDZIWEGO KWITKA MANDATU */
+        .ticket-preview { margin-top: 25px; background: #f8fafc; color: #0f172a; padding: 20px; border-radius: 8px; border: 2px dashed #cbd5e1; display: none; }
+        .ticket-header { text-align: center; border-bottom: 2px solid #0f172a; padding-bottom: 8px; margin-bottom: 12px; }
+        .ticket-row { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 6px; border-bottom: 1px dotted #cbd5e1; padding-bottom: 4px; }
+        .ticket-footer { text-align: center; margin-top: 15px; font-size: 11px; color: #64748b; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>🚨 Generator Mandatów Karny</h2>
+    <div class="form-group">
+        <label>Numer telefonu / Obywatel (np. 555-010):</label>
+        <input type="text" id="m-phone" placeholder="Wpisz numer telefonu ukaranego">
+    </div>
+    <div class="form-group">
+        <label>Rodzaj wykroczenia / Taryfikator:</label>
+        <select id="m-reason" onchange="updateDefaultAmount()">
+            <option value="Przekroczenie prędkości">Przekroczenie prędkości (500 PLN)</option>
+            <option value="Niezastosowanie się do sygnalizatora">Niezastosowanie się do sygnalizatora (300 PLN)</option>
+            <option value="Brak uprawnień do kierowania">Brak uprawnień do kierowania (2000 PLN)</option>
+            <option value="Zakłócenie porządku publicznego">Zakłócenie porządku publicznego (400 PLN)</option>
+            <option value="Niewskazanie sprawcy / Ucieczka przed Policją">Ucieczka przed Policją / Uszkodzenie mienia (5000 PLN)</option>
+        </select>
+    </div>
+    <div class="form-group">
+        <label>Kwota mandatu (PLN):</label>
+        <input type="number" id="m-amount" value="500">
+    </div>
+    <div class="form-group">
+        <label>Punkty karne:</label>
+        <input type="number" id="m-points" value="5">
+    </div>
+    <div class="form-group">
+        <label>Numer odznaki wystawiającego:</label>
+        <input type="text" id="m-cop" placeholder="np. 104">
+    </div>
+    <button class="btn-mandat" onclick="issueMandat()">WYSTAW MANDAT I POBierz ŚRODKI</button>
+
+    <!-- WYGENEROWANY KWITEK -->
+</div>
+
+<script>
+    const firebaseConfig = {
+        apiKey: "AIzaSyCGJbpt3_AhHf1Sjs1CQCi0BgoSbeeJj-A",
+        authDomain: "telefon-rp.firebaseapp.com",
+        databaseURL: "https://telefon-rp-default-rtdb.europe-west1.firebasedatabase.app",
+        projectId: "telefon-rp",
+        storageBucket: "telefon-rp.firebasestorage.app",
+        messagingSenderId: "435004215498",
+        appId: "1:435004215498:web:fe4f4fe25dc15e1b056433",
+        measurementId: "G-D46V1EX5G1"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+
+    function updateDefaultAmount() {
+        const reason = document.getElementById('m-reason').value;
+        let amt = 500, pts = 5;
+        if(reason.includes("sygnalizatora")) { amt = 300; pts = 3; }
+        else if(reason.includes("Brak uprawnień")) { amt = 2000; pts = 10; }
+        else if(reason.includes("porządku")) { amt = 400; pts = 0; }
+        else if(reason.includes("Ucieczka")) { amt = 5000; pts = 15; }
+        document.getElementById('m-amount').value = amt;
+        document.getElementById('m-points').value = pts;
+    }
+
+    function issueMandat() {
+        const phone = document.getElementById('m-phone').value.trim();
+        const reason = document.getElementById('m-reason').value;
+        const amount = parseFloat(document.getElementById('m-amount').value);
+        const points = parseInt(document.getElementById('m-points').value) || 0;
+        const cop = document.getElementById('m-cop').value.trim() || "Nieznany";
+        const timeStr = new Date().toLocaleDateString('pl-PL') + ' ' + new Date().toLocaleTimeString('pl-PL', {hour:'2-digit', minute:'2-digit'});
+
+        if(!phone || isNaN(amount)) {
+            alert("Podaj poprawnie numer telefonu oraz kwotę!");
+            return;
+        }
+
+        // 1. Pobierz dane banku i obywatela z Firebase
+        db.ref('bank_accounts/' + phone).once('value', bankSnap => {
+            let acc = bankSnap.val() || { balance: 20000, history: [] };
+            acc.balance -= amount;
+            acc.history = acc.history || [];
+            acc.history.push({
+                title: `Mandat Karny (${reason}) - Funkcjonariusz #${cop}`,
+                amount: amount,
+                type: 'out',
+                time: new Date().toLocaleTimeString('pl-PL', {hour:'2-digit', minute:'2-digit'})
+            });
+
+            // Zapisz zaktualizowany bank
+            db.ref('bank_accounts/' + phone).set(acc);
+        });
+
+        // 2. Dodaj punkty karne do kartoteki obywatela
+        db.ref('citizens/' + phone).once('value', citSnap => {
+            let cit = citSnap.val() || { penaltyPoints: 0 };
+            let currentPts = cit.penaltyPoints || 0;
+            let newPts = currentPts + points;
+            
+            db.ref('citizens/' + phone + '/penaltyPoints').set(newPts);
+        });
+
+        // 3. Zapisz mandat w globalnym rejestrze mandatów (dla historii w Bluebirdzie)
+        db.ref('mandaty_history').push({
+            telefon: phone,
+            powod: reason,
+            kwota: amount,
+            punkty: points,
+            policjant: cop,
+            czas: timeStr
+        });
+
+        alert("✅ Mandat został pomyślnie wystawiony! Środki pobrano z konta bankowego obywatela, a punkty dopisano do CEK.");
+    }
+</script>
+</body>
+</html>
